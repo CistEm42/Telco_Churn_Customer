@@ -1,5 +1,5 @@
 import pandas as pd
-from extract import extract
+from src.extract import extract
 
 def transform(data: pd.DataFrame) -> pd.DataFrame:
     data = data.copy()

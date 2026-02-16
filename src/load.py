@@ -1,7 +1,7 @@
 import pandas as pd
 from sqlalchemy import create_engine
-from extract import extract
-from transform import transform
+from src.extract import extract
+from src.transform import transform
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -12,7 +12,7 @@ OUTPUT_PATH = OUTPUT_DIR / "Telco_Customer_Churn_clean.csv"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 ENGINE = create_engine(
-    "mssql+pyodbc://DESKTOP-VESV47U\SQLEXPRESS/TelcoChurn"
+    r"mssql+pyodbc://DESKTOP-VESV47U\SQLEXPRESS/TelcoChurn"
     "?driver=ODBC+Driver+17+for+SQL+Server"
     "&trusted_connection=yes"
 )
@@ -35,6 +35,8 @@ def load():
     )
 
     print("[LOAD] Data loaded into SQL Server")
+
+    return data_clean
 
 if __name__ == "__main__":
     load()

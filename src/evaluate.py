@@ -1,4 +1,8 @@
 from sklearn.pipeline import Pipeline
+import joblib
+from src.load import load
+from sklearn.impute import SimpleImputer
+from pathlib import Path
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -7,11 +11,13 @@ from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.metrics import roc_auc_score, classification_report, f1_score, precision_recall_curve
-from config import (
-    TARGET_COLUMN, NUMERICAL_FEATURES, CATEGORICAL_FEATURES
+from src.config import (
+    TARGET_COLUMN, NUMERICAL_FEATURES, CATEGORICAL_FEATURES, MODEL_PATH
 )
 
 def evaluate_models(data):
+
+
     X = data.drop(columns=[TARGET_COLUMN])
     y = data[TARGET_COLUMN]
 
@@ -25,8 +31,14 @@ def evaluate_models(data):
     scale_pos_weight = len(y_train[y_train == 0]) / len(y_train[y_train == 1])
 
     preprocessor = ColumnTransformer(transformers=[
-        ("num", StandardScaler(), NUMERICAL_FEATURES),
-        ("cat", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL_FEATURES)
+        ("num", Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler())
+        ]), NUMERICAL_FEATURES),
+         ("cat", Pipeline([
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("onehot", OneHotEncoder(handle_unknown="ignore"))
+        ]), CATEGORICAL_FEATURES)
     ])
 
 
@@ -41,7 +53,7 @@ def evaluate_models(data):
         "Random Forest": {"model": RandomForestClassifier(class_weight="balanced", random_state=42), 
                 "params": { "model__n_estimators": [100, 200],
                     "model__max_depth": [None, 5, 10],
-                    "min_samples_split": [2, 5]}},
+                    "model__min_samples_split": [2, 5]}},
         "XGBoost": {"model": XGBClassifier(scale_pos_weight=scale_pos_weight,
                         random_state=42,
                         eval_metric="logloss"), "params": {"model__n_estimators": [100, 200],
@@ -66,7 +78,7 @@ def evaluate_models(data):
                 pipeline,
                 param_grid=mp["params"],
                 cv=cv,
-                scoring="roc_auc_score",
+                scoring="roc_auc",
                 n_jobs=-1
             )
 
@@ -87,7 +99,16 @@ def evaluate_models(data):
     print(f"\nBest Model: {best_model_name}")
     print("Best Test ROC-AUC:", best_score)
 
+    joblib.dump(best_model, MODEL_PATH)
+    print(f"Model saved to {MODEL_PATH}")
+
     return best_model
+
+
+if __name__ == "__main__":
+    data = load()  # or however you're loading
+    best_model = evaluate_models(data)
+    joblib.dump(best_model, MODEL_PATH)
 
         
 
