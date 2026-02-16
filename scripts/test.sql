@@ -1,0 +1,34 @@
+EXEC sp_help 'staging.customer';
+
+SELECT *
+FROM dbo.TelcoClean
+WHERE TRY_CAST(tenure AS INT) IS NULL
+AND tenure IS NOT NULL;
+
+
+SELECT 
+    COLUMN_NAME,
+    DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'customer'
+AND TABLE_SCHEMA = 'staging';
+
+SELECT 
+    TABLE_SCHEMA,
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'customer';
+
+
+SELECT 
+    COLUMN_NAME,
+    DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'TelcoClean'
+AND COLUMN_NAME = 'customerID';
+go
+exec sp_help 'dbo.telcoClean';
+
+
