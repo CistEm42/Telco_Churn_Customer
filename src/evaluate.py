@@ -106,7 +106,7 @@ def evaluate_models(data):
 
 
 if __name__ == "__main__":
-    data = load()  # or however you're loading
+    data = load() 
     best_model = evaluate_models(data)
     joblib.dump(best_model, MODEL_PATH)
 
