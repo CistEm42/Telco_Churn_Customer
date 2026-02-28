@@ -8,13 +8,10 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
-        git \
-        cmake \
-        gfortran \
-        libopenblas-dev \
-        liblapack-dev \
-        python3-dev \
-        && rm -rf /var/lib/apt/lists/*
+        gcc \
+    gfortran \
+    libatlas-base-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip, setuptools, wheel
 RUN pip install --upgrade pip setuptools wheel
