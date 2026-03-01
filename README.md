@@ -8,7 +8,7 @@ Streamlit (Frontend UI)
 
 Docker & Docker Compose (Containerization)
 
-Scikit-Learn (ML model)
+Scikit-Learn - XGBoost (ML model)
 
 - Project Overview
 
@@ -44,3 +44,32 @@ UI displays results
 Install Docker Desktop
 
 Make sure Docker Engine is running
+
+- Stack
+Python 3.11
+
+Scikit-learn Pipeline
+
+XGBoost
+
+FastAPI
+
+Streamlit
+
+Docker & Docker Compose
+
+AWS EC2 Deployment
+
+- Model Details
+
+Algorithm: XGBoost Classifier
+
+Wrapped inside a Scikit-learn Pipeline
+
+Handles:
+
+Categorical encoding
+
+Numerical scaling
+
+Prediction probability output
