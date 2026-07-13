@@ -1,3 +1,6 @@
+import tempfile
+import pandas as pd
+import os
 from sklearn.pipeline import Pipeline
 import joblib
 from src.load import load
@@ -10,7 +13,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from sklearn.model_selection import StratifiedKFold, GridSearchCV
-from sklearn.metrics import roc_auc_score, classification_report, f1_score, precision_recall_curve
+from sklearn.metrics import roc_auc_score, classification_report, f1_score, precision_score, recall_score, confusion_matrix
 from src.config import (
     TARGET_COLUMN, NUMERICAL_FEATURES, CATEGORICAL_FEATURES, MODEL_PATH
 )
@@ -19,8 +22,9 @@ warnings.filterwarnings("ignore")
 import logging
 logging.basicConfig(level=logging.INFO)
 
-mlflow.sklearn.autolog(disable=True)
-mlflow.set_experiment(experiment_name="Telco_evaluate")
+mlflow.enable_system_metrics_logging()
+mlflow.sklearn.autolog(disable=False)
+mlflow.set_experiment(experiment_name="Telco_eval")
 mlflow.set_tracking_uri("http://127.0.0.1:5000")
 
 def evaluate_models(data):
@@ -48,8 +52,9 @@ def evaluate_models(data):
     ])
 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    all_model_results = {}
     
-    with mlflow.start_run(run_name="Telco Run") as parent_run:
+    with mlflow.start_run(run_name="Telco_Run") as parent_run:
         print(f"Parent Run ID: {parent_run.info.run_id}")
         
         mlflow.log_params({
@@ -64,14 +69,14 @@ def evaluate_models(data):
         })
 
         models = {
-            "Logistic Regression": {
+            "Logistic_Regression": {
                 "model": LogisticRegression(max_iter=100, class_weight="balanced", random_state=42),
                 "params": {
                     "model__C": [0.01, 0.1, 1, 10],
                     "model__penalty": ["l2"]
                 }
             },
-            "Random Forest": {
+            "Random_Forest": {
                 "model": RandomForestClassifier(class_weight="balanced", random_state=42),
                 "params": {
                     "model__n_estimators": [100, 200],
@@ -102,7 +107,7 @@ def evaluate_models(data):
 
         for name, mp in models.items():
             with mlflow.start_run(run_name=f"{name}_GridSearch", nested=True) as model_run:
-                print(f"\n{'='*50}")
+                print(f"{'='*50}")
                 print(f"Running Grid Search for {name}...")
                 print(f"{'='*50}")
                 print(f"Model Run ID: {model_run.info.run_id}")
@@ -134,37 +139,60 @@ def evaluate_models(data):
                 test_auc = roc_auc_score(y_test, y_pred_proba)
                 y_pred = best_estimator.predict(X_test)
                 test_f1 = f1_score(y_test, y_pred)
+                test_precision = precision_score(y_test, y_pred)
+                test_recall = recall_score(y_test, y_pred)
 
-                # Log metrics
+                tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+                test_specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+                test_accuracy = (tp + tn) / (tp + tn + fp + fn)
+                
+                # Log metrics to child run
                 mlflow.log_metric("cv_mean_roc_auc", grid.best_score_)
                 mlflow.log_metric("test_roc_auc", test_auc)
                 mlflow.log_metric("test_f1_score", test_f1)
-
+                mlflow.log_metric("test_precision", test_precision)
+                mlflow.log_metric("test_recall", test_recall)
+                mlflow.log_metric("test_specificity", test_specificity)
+                mlflow.log_metric("test_accuracy", test_accuracy)
+                
                 # Log best parameters
                 for param_name, param_value in grid.best_params_.items():
-                    mlflow.log_param(f"best_{param_name}", param_value)
+                    clean_name = param_name.replace("model__", "")
+                    mlflow.log_param(f"best_{clean_name}", param_value)
 
-                # Log the model - FIXED INDENTATION
+                # Log the model
                 try:
                     mlflow.sklearn.log_model(
                         sk_model=best_estimator,
-                        name=f"model_{name.replace(' ', '_')}",
-                        registered_model_name=f"Telco_{name.replace(' ', '_')}",
+                        name=f"model_{name}",
+                        registered_model_name=f"Telco_{name}",
                         pip_requirements=None
                     )
                 except Exception as e:
                     print(f"Warning: Could not log model with sklearn flavor: {e}")
                     # Fallback: Use pyfunc
                     mlflow.pyfunc.log_model(
-                        name=f"model_{name.replace(' ', '_')}",
+                        name=f"model_{name}",
                         python_model=best_estimator,
-                        registered_model_name=f"Telco_{name.replace(' ', '_')}",
+                        registered_model_name=f"Telco_{name}",
                         pip_requirements=None
                     )
 
-                # Log classification report - FIXED INDENTATION (outside try/except)
+                # Log classification report
                 report = classification_report(y_test, y_pred, output_dict=True)
-                mlflow.log_dict(report, f"classification_report_{name.replace(' ', '_')}.json")
+                mlflow.log_dict(report, f"classification_report_{name}.json")
+
+                # Store results
+                all_model_results[name] = {
+                    "cv_roc_auc": grid.best_score_,
+                    "test_roc_auc": test_auc,
+                    "test_f1": test_f1,
+                    "test_precision": test_precision,
+                    "test_recall": test_recall,
+                    "test_specificity": test_specificity,
+                    "test_accuracy": test_accuracy,
+                    "best_params": grid.best_params_
+                }
 
                 print(f"Best Params: {grid.best_params_}")
                 print(f"CV ROC-AUC: {grid.best_score_:.4f}")
@@ -177,6 +205,57 @@ def evaluate_models(data):
                     best_model = best_estimator
                     best_model_name = name
                     best_run_id = model_run.info.run_id
+
+        # Log all model results to parent run
+        print("\nLogging all model results to parent run...")
+        print("="*50)
+        
+        for model_name, results in all_model_results.items():
+            prefix = model_name.lower()
+            
+            # Log metrics with model name prefix
+            mlflow.log_metric(f"{prefix}_cv_roc_auc", results["cv_roc_auc"])
+            mlflow.log_metric(f"{prefix}_test_roc_auc", results["test_roc_auc"])
+            mlflow.log_metric(f"{prefix}_test_f1", results["test_f1"])
+            mlflow.log_metric(f"{prefix}_test_precision", results["test_precision"])
+            mlflow.log_metric(f"{prefix}_test_recall", results["test_recall"])
+            mlflow.log_metric(f"{prefix}_test_specificity", results["test_specificity"])
+            mlflow.log_metric(f"{prefix}_test_accuracy", results["test_accuracy"])
+            
+            print(f"Logged metrics for {model_name} to parent run")
+
+        # Create comparison DataFrame
+        if all_model_results:
+            comparison_data = {}
+            for model_name, results in all_model_results.items():
+                comparison_data[model_name] = {
+                    "CV_ROC_AUC": results["cv_roc_auc"],
+                    "Test_ROC_AUC": results["test_roc_auc"],
+                    "Test_F1": results["test_f1"],
+                    "Test_Precision": results["test_precision"],
+                    "Test_Recall": results["test_recall"],
+                    "Test_Specificity": results["test_specificity"],
+                    "Test_Accuracy": results["test_accuracy"]
+                }
+            
+            comparison_df = pd.DataFrame(comparison_data).T
+            comparison_df.index.name = "Model"
+            
+            # Log comparison table without tempfile permission issues
+            comparison_json = comparison_df.to_json(orient='table', index=True)
+            
+            # Use log_dict instead of tempfile
+            comparison_dict = comparison_df.to_dict()
+            mlflow.log_dict(comparison_dict, "model_comparison.json")
+            
+            # Also save as CSV
+            csv_path = "model_comparison.csv"
+            comparison_df.to_csv(csv_path)
+            mlflow.log_artifact(csv_path)
+            os.remove(csv_path)
+            
+            print("\nModel Comparison:")
+            print(comparison_df.round(4))
 
         # Log best model info to parent run
         if best_model is not None:

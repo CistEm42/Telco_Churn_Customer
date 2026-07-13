@@ -1,0 +1,23 @@
+artifact_path: file:C:/Users/Durosimi/PROJECTS/Churn/mlruns/2/models/m-104703d511df4669b69c8e6a9d7b95cc/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.12.6
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.6.1
+    skops_trusted_types: null
+mlflow_version: 3.9.0
+model_id: m-104703d511df4669b69c8e6a9d7b95cc
+model_size_bytes: 4531
+model_uuid: m-104703d511df4669b69c8e6a9d7b95cc
+prompts: null
+run_id: a14b608b71044b6ebc62ae6cbe2d7512
+utc_time_created: '2026-07-13 10:27:36.082378'
